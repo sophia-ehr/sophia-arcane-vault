@@ -36,14 +36,21 @@ export interface EntityRef {
 /** v0.17.0: how a link's target source was pinned at extraction time. */
 export type LinkResolutionType = 'qualified' | 'unqualified';
 
-/**
- * Directory prefix whitelist. These are the top-level slug dirs the extractor
- * recognizes as entity references. Upstream canonical + our extensions:
- *   - Gbrain canonical: people, companies, meetings, concepts, deal, civic, project, source, media, yc, projects
- *   - Our domain extensions: tech, finance, personal, openclaw (domain-organized wikis)
- *   - Our entity prefix: entities (we kept some legacy entities/projects/ pages)
- */
-const DIR_PATTERN = '(?:people|companies|meetings|concepts|deal|civic|project|projects|source|media|yc|tech|finance|personal|openclaw|entities)';
+// SOPHIA: directory whitelist is extensible at runtime via GBRAIN_LINK_DIRS
+// (comma-separated), mirroring the GBRAIN_SOURCE_BOOST override in
+// search/source-boost.ts. This is the ONLY source divergence from upstream —
+// taxonomy lives in the schema pack, tuning in env. Upstreamable as a generic
+// "configurable DIR_PATTERN".
+const BASE_DIRS = [
+  'people', 'companies', 'meetings', 'concepts', 'deal', 'civic',
+  'project', 'projects', 'source', 'media', 'yc',
+  'tech', 'finance', 'personal', 'openclaw', 'entities',
+];
+const EXTRA_DIRS = (process.env.GBRAIN_LINK_DIRS ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const DIR_PATTERN = `(?:${[...new Set([...BASE_DIRS, ...EXTRA_DIRS])].join('|')})`;
 
 /**
  * Match `[Name](path)` markdown links pointing to entity directories.

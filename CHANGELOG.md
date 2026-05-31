@@ -2,6 +2,12 @@
 
 All notable changes to GBrain will be documented in this file.
 
+## SOPHIA Arcane Vault — Fork Pin
+
+Forked from `garrytan/gbrain` at commit `248fb7a90f9ce5fe2e5d01fe486345d08834ed40` (tag `v0.41.38.0`).
+Upstream remote: `https://github.com/garrytan/gbrain.git`
+Origin remote: `https://github.com/sophia-ehr/sophia-arcane-vault.git`
+
 ## [0.41.38.0] - 2026-05-30
 
 **Two fixes for Supabase brains with a code source. `gbrain code-callers` and
