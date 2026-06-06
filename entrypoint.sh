@@ -24,8 +24,19 @@ gbrain init --postgres 2>/dev/null || true
 gbrain schema use sophia-base 2>/dev/null || true
 gbrain config set search.mode balanced 2>/dev/null || true
 
-# Start autopilot daemon (sync/embed/dream) in background.
-gbrain autopilot &
+# Register the brain repo + run the initial sync.
+# v0.41 reality: GBRAIN_BRAIN_DIR is a no-op, and `gbrain init` creates a
+# "default" source with NO local_path — so plain `gbrain sync` fails with
+# 'Source "default" has no local_path'. `sync --repo` resolves the path AND, on
+# success, writes a per-source repo_path anchor into Postgres (persists in the
+# db volume). After this, plain `gbrain sync` — including autopilot's — works.
+# Idempotent: fresh DB imports + sets the anchor; existing DB is "Already up to
+# date". (NOTE: `gbrain config set sync.repo_path` does NOT feed sync — verified.)
+gbrain sync --repo /brain --yes 2>&1 || true
+
+# Start autopilot daemon (sync/embed/dream) in background. --repo keeps it robust
+# even before the anchor exists (brand-new DB on first boot).
+gbrain autopilot --repo /brain &
 
 # Start HTTP MCP server (foreground).
 # --bind 0.0.0.0 is REQUIRED: `gbrain serve --http` defaults to 127.0.0.1
