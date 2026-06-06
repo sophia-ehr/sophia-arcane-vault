@@ -1,0 +1,50 @@
+name: sophia-brain-stack
+
+services:
+  brain-db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: brain
+      POSTGRES_USER: sophia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "sophia", "-d", "brain"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  gbrain:
+    build:
+      context: .                 # fork repo root
+      dockerfile: Dockerfile.deploy
+    restart: unless-stopped
+    depends_on:
+      brain-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://sophia:${POSTGRES_PASSWORD}@brain-db:5432/brain
+      GBRAIN_BRAIN_DIR: /brain   # absolute, in-container (NOT ../sophia-brain)
+      GBRAIN_ENGINE: postgres
+      GBRAIN_SEARCH_MODE: balanced
+      GBRAIN_LINK_DIRS: organizations,tools,strategy,conferences,decisions,deliverables,sophia
+      GBRAIN_SOURCE_BOOST: "strategy/:1.5,organizations/:1.3,people/:1.2,decisions/:1.2,concepts/:1.2,tools/:1.1,inbox/:0.8,sources/:0.7,archive/:0.6"
+      ZEROENTROPY_API_KEY: ${ZEROENTROPY_API_KEY}
+      GIT_TOKEN: ${GIT_TOKEN}
+    volumes:
+      - brain-repo:/brain        # named volume; populated by entrypoint clone of sophia-brain
+    expose:
+      - "3131"
+    networks:
+      - default          # inter-service DNS (brain-db)
+      - dokploy-network  # external access (Hermes)
+
+networks:
+  dokploy-network:
+    external: true
+
+volumes:
+  db-data:
+  brain-repo:

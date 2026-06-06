@@ -1,0 +1,27 @@
+FROM oven/bun:1.3-debian
+
+RUN apt-get update && apt-get install -y --no-install-recommends git tini ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . .
+
+# Install deps and COMPILE the gbrain CLI to a standalone binary on PATH.
+# The package bin is src/cli.ts; the blessed executable comes from the repo's
+# own `build` script (`bun build --compile --outfile bin/gbrain src/cli.ts`).
+# `bun install --production` alone would leave no `gbrain` command. The embedded
+# admin SPA is already committed (src/admin-embedded.ts), so no admin build here.
+RUN bun install --frozen-lockfile \
+    && bun run build \
+    && test -x /app/bin/gbrain
+ENV PATH="/app/bin:${PATH}"
+
+ENV GBRAIN_BRAIN_DIR=/brain
+ENV GBRAIN_ENGINE=postgres
+VOLUME /brain
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["/entrypoint.sh"]
