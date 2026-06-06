@@ -16,7 +16,9 @@ RUN bun install --frozen-lockfile \
     && test -x /app/bin/gbrain
 ENV PATH="/app/bin:${PATH}"
 
-ENV GBRAIN_BRAIN_DIR=/brain
+# NOTE: GBRAIN_BRAIN_DIR is intentionally NOT set — it's a no-op in gbrain v0.41.
+# The brain repo path is registered at runtime via `gbrain sync --repo /brain`
+# (see entrypoint.sh), which persists a repo_path anchor in Postgres.
 ENV GBRAIN_ENGINE=postgres
 VOLUME /brain
 

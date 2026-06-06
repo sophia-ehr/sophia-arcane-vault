@@ -26,7 +26,8 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://sophia:${POSTGRES_PASSWORD}@brain-db:5432/brain
-      GBRAIN_BRAIN_DIR: /brain   # absolute, in-container (NOT ../sophia-brain)
+      # GBRAIN_BRAIN_DIR removed — no-op in v0.41. Repo path is set at runtime by
+      # entrypoint.sh via `gbrain sync --repo /brain` (persists a Postgres anchor).
       GBRAIN_ENGINE: postgres
       GBRAIN_SEARCH_MODE: balanced
       GBRAIN_LINK_DIRS: organizations,tools,strategy,conferences,decisions,deliverables,sophia
