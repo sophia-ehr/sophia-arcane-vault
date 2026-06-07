@@ -18,11 +18,30 @@ TOP="$(git -C /brain rev-parse --show-toplevel 2>/dev/null || echo '')"
 # Initialize the Postgres-backed brain if needed. ZEROENTROPY_API_KEY is present
 # in the runtime env, so headless init resolves the embedding provider
 # (gbrain v0.37+ fails loud on init when no embedding key is present).
-gbrain init --postgres 2>/dev/null || true
+# Tolerate re-init on an existing brain, but keep stderr visible (no 2>/dev/null).
+gbrain init --postgres || echo "gbrain init: continuing (brain likely already initialized)"
 
-# Ensure SOPHIA taxonomy + balanced search mode (PRD §5.2).
-gbrain schema use sophia-base 2>/dev/null || true
-gbrain config set search.mode balanced 2>/dev/null || true
+# --- Schema-pack activation (FIX 2026-06) -----------------------------------
+# The engine pack locator ONLY looks at bundled packs + ~/.gbrain/schema-packs/<name>/
+# — it does NOT discover the repo-committed /brain/_schema/. Previously this step
+# was `gbrain schema use sophia-base 2>/dev/null || true`, which FAILED SILENTLY:
+# the pack was never installed where the locator looks, so the brain ran on a
+# broken `gbrain-base` fallback (`gbrain schema active` → "unknown schema pack").
+# Fix: install the repo-canonical pack into the locator path, then SELECT it with
+# `gbrain schema use` (writes schema_pack into ~/.gbrain/config.json; re-applied on
+# every boot, so it is robust even though ~/.gbrain is container-local). NB:
+# `gbrain config set schema_pack` is rejected as an unknown key — `schema use` is
+# the supported selector. NO failure-swallowing: a missing/bad pack must fail the
+# boot loudly rather than silently degrade to the wrong taxonomy.
+test -f /brain/_schema/sophia-base/pack.yaml \
+  || { echo "FATAL: /brain/_schema/sophia-base/pack.yaml missing"; exit 1; }
+mkdir -p /root/.gbrain/schema-packs
+cp -r /brain/_schema/sophia-base /root/.gbrain/schema-packs/sophia-base
+gbrain schema use sophia-base
+gbrain config set search.mode balanced
+gbrain schema active | grep -q "sophia-base" \
+  || { echo "FATAL: sophia-base not active after install"; gbrain schema active; exit 1; }
+echo "Schema pack active: sophia-base"
 
 # Register the brain repo + run the initial sync.
 # v0.41 reality: GBRAIN_BRAIN_DIR is a no-op, and `gbrain init` creates a
