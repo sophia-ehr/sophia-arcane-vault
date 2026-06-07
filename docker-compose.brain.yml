@@ -1,5 +1,17 @@
 name: sophia-brain-stack
 
+# A2 decomposition: the brain engine is split into two supervised, long-lived roles
+# sharing one Postgres DB and one git working-tree volume.
+#   - `gbrain`            HTTP MCP server (serve). Owns one-time content population
+#                         (clone + init + initial sync). KEEP this service named
+#                         `gbrain` so the dokploy-network DNS alias stays `gbrain`
+#                         (Hermes connects to http://gbrain:3131/mcp).
+#   - `gbrain-autopilot`  Self-maintaining daemon (sync/embed/dream). SOLE git writer
+#                         (commits + pushes). `restart: unless-stopped` supervises it
+#                         (fixes the prior unsupervised backgrounded-`&` finding).
+# The cross-container cycle lock lives in Postgres, so only one maintenance cycle
+# runs at a time even with serve + autopilot as separate containers.
+
 services:
   brain-db:
     image: pgvector/pgvector:pg17
@@ -20,27 +32,49 @@ services:
     build:
       context: .                 # fork repo root
       dockerfile: Dockerfile.deploy
+    command: ["serve"]
     restart: unless-stopped
     depends_on:
       brain-db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://sophia:${POSTGRES_PASSWORD}@brain-db:5432/brain
-      # GBRAIN_BRAIN_DIR removed — no-op in v0.41. Repo path is set at runtime by
-      # entrypoint.sh via `gbrain sync --repo /brain` (persists a Postgres anchor).
       GBRAIN_ENGINE: postgres
       GBRAIN_SEARCH_MODE: balanced
       GBRAIN_LINK_DIRS: organizations,tools,strategy,conferences,decisions,deliverables,sophia
       GBRAIN_SOURCE_BOOST: "strategy/:1.5,organizations/:1.3,people/:1.2,decisions/:1.2,concepts/:1.2,tools/:1.1,inbox/:0.8,sources/:0.7,archive/:0.6"
       ZEROENTROPY_API_KEY: ${ZEROENTROPY_API_KEY}
       GIT_TOKEN: ${GIT_TOKEN}
+      GBRAIN_PUBLIC_URL: ${GBRAIN_PUBLIC_URL:-http://localhost:3131}
     volumes:
-      - brain-repo:/brain        # named volume; populated by entrypoint clone of sophia-brain
+      - brain-repo:/brain        # shared content working-tree; serve clones on first boot
     expose:
       - "3131"
     networks:
       - default          # inter-service DNS (brain-db)
-      - dokploy-network  # external access (Hermes)
+      - dokploy-network  # external access (Hermes) via the `gbrain` alias
+
+  gbrain-autopilot:
+    build:
+      context: .
+      dockerfile: Dockerfile.deploy
+    command: ["autopilot"]
+    restart: unless-stopped
+    depends_on:
+      brain-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://sophia:${POSTGRES_PASSWORD}@brain-db:5432/brain
+      GBRAIN_ENGINE: postgres
+      GBRAIN_SEARCH_MODE: balanced
+      GBRAIN_LINK_DIRS: organizations,tools,strategy,conferences,decisions,deliverables,sophia
+      GBRAIN_SOURCE_BOOST: "strategy/:1.5,organizations/:1.3,people/:1.2,decisions/:1.2,concepts/:1.2,tools/:1.1,inbox/:0.8,sources/:0.7,archive/:0.6"
+      ZEROENTROPY_API_KEY: ${ZEROENTROPY_API_KEY}
+      GIT_TOKEN: ${GIT_TOKEN}      # needed for autopilot's commit + push
+    volumes:
+      - brain-repo:/brain          # same working tree as serve; autopilot is sole writer
+    networks:
+      - default
 
 networks:
   dokploy-network:

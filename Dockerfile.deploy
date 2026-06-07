@@ -25,5 +25,7 @@ VOLUME /brain
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["/entrypoint.sh"]
+# Role-dispatch: the compose passes "serve" (default) or "autopilot" as the command
+# arg to /entrypoint.sh. tini stays PID 1 to reap the long-lived gbrain child.
+ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
+CMD ["serve"]
